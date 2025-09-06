@@ -4,6 +4,7 @@
 
 #include "pch.h"
 #include "framework.h"
+#include "NetProtocol.h"
 // SHARED_HANDLERS 可以在实现预览、缩略图和搜索筛选器句柄的
 // ATL 项目中进行定义，并允许与该项目共享文档代码。
 #ifndef SHARED_HANDLERS
@@ -31,14 +32,23 @@ END_MESSAGE_MAP()
 
 // CtestDoc 构造/析构
 
-CtestDoc::CtestDoc() noexcept
+CtestDoc::CtestDoc() noexcept:m_isServer(TRUE),m_passCount(0),m_lastWinnerIndex(2)//暂且默认为2
 {
 	// TODO: 在此添加一次性构造代码
-	StrName = _T("This is a test!");
+	m_currentRoundCards.InitHashTable(5);//哈希表
+	m_currentRoundCards.SetAt(0, new CObList());
+	m_currentRoundCards.SetAt(1, new CObList());
+	m_currentRoundCards.SetAt(2, new CObList());
 }
 
 CtestDoc::~CtestDoc()
 {
+	for (int i = 0; i < 3; i++) {
+		CObList* pList = nullptr;
+		if (m_currentRoundCards.Lookup(i, pList)) {
+			delete pList;
+		}
+	}
 }
 
 BOOL CtestDoc::OnNewDocument()
@@ -125,12 +135,12 @@ void CtestDoc::InitializeGame(){
 	m_cardListAtTop.AddTail(tempDeck[51]);
 	m_cardListAtTop.AddTail(tempDeck[52]);
 	m_cardListAtTop.AddTail(tempDeck[53]);
-	ShuffleDeck(m_leftPlayerHand);
-	ShuffleDeck(m_rightPlayerHand);
-	ShuffleDeck(m_cardListHand);
+	SortCards(m_leftPlayerHand);
+	SortCards(m_rightPlayerHand);
+	SortCards(m_cardListHand);
 }
 
-void CtestDoc::ShuffleDeck(CObList& cardList)
+void CtestDoc::SortCards(CObList& cardList)
 {
 	if (cardList.IsEmpty()) {
 		return;
@@ -162,7 +172,7 @@ void CtestDoc::ShuffleDeck(CObList& cardList)
 
 void CtestDoc::CleanAllList()
 {
-	CleanOneList(m_playedCardList);
+	//CleanOneList(m_playedCardList);
 	CleanOneList(m_leftPlayerHand);
 	CleanOneList(m_rightPlayerHand);
 	CleanOneList(m_cardListHand);
@@ -248,6 +258,36 @@ void CtestDoc::SetSearchContent(const CString& value)
 // CtestDoc 诊断
 
 #ifdef _DEBUG
+CCard* CtestDoc::FindAndRemoveCardFromHand(int& playerIndex1, CardData& cards)
+{
+	CObList* pHandList = nullptr;
+	switch ((2 + playerIndex1 - playerIndex) % 3) {
+	case 0: pHandList = &m_leftPlayerHand; break;
+	case 1: pHandList = &m_rightPlayerHand; break;
+	case 2: pHandList = &m_cardListHand; break;
+	}
+	if (!pHandList) {
+		return nullptr;
+	}
+	POSITION pos = pHandList->GetHeadPosition();
+	POSITION prevPos = pos; // CObList 删除时需要前一个位置
+
+	while (pos)
+	{
+		CCard* pCard = (CCard*)pHandList->GetNext(pos);
+
+		// 3. 比较花色和点数
+		if (pCard->m_suit == cards.suit && pCard->m_rank == cards.rank)
+		{
+			pHandList->RemoveAt(prevPos);
+			return pCard;
+		}
+
+		prevPos = pos; // 更新 prevPos
+	}
+
+	return nullptr;
+}
 void CtestDoc::AssertValid() const
 {
 	CDocument::AssertValid();
@@ -267,4 +307,164 @@ void CtestDoc::DeleteContents()
 	// TODO: 在此添加专用代码和/或调用基类
 	CleanAllList();
 	CDocument::DeleteContents();
+}
+
+void CtestDoc::StartServer()
+{
+	// TODO: 在此处添加实现代码.
+	m_isServer = TRUE;
+	if (!m_serverSocket.Create(12345)) {
+		AfxMessageBox(_T("创建网络服务器失败！"));
+	}
+	if (!m_serverSocket.Listen()) {
+		AfxMessageBox(_T("端口监听失败！"));
+	}
+}
+
+void CtestDoc::ConnectToServer(const CString& serverAddress)
+{
+	m_isServer = FALSE;
+	if (!m_clientSocket.Create()) {
+		AfxMessageBox(_T("创建客户端Socket失败！"));
+		return;
+	}
+	if (!m_clientSocket.Connect(serverAddress, 12345)) {
+		// 注意: Connect是非阻塞的，结果会在OnConnect回调中处理
+	}
+}
+
+void CtestDoc::BroadcastPacket(GamePacket* packet)
+{
+	if (!m_isServer) return;
+	POSITION pos = m_clientSockets.GetHeadPosition();
+	while (pos) {
+		ClientSocket* pClient = (ClientSocket*)m_clientSockets.GetNext(pos);
+		pClient->Send(packet, sizeof(GamePacket));
+	}
+	OnReceivePacket(packet, nullptr);//服务器自己也要处理这个消息
+}
+
+void CtestDoc::SendPacket(GamePacket* packet)
+{
+	if (m_isServer) {
+		OnReceivePacket(packet, nullptr);//主机直接处理自己的操作
+	}
+	else {
+		m_clientSocket.Send(packet, sizeof(GamePacket));
+	}
+}
+
+void CtestDoc::OnReceivePacket(GamePacket* packet, ClientSocket* pFromSocket)
+{
+	switch (packet->msgType) {
+		case MSG_DEAL_CARDS: {
+			//我是客户端，我收到了服务器发来的牌
+			m_cardListHand.RemoveAll();//清空手牌
+			for (int i = 0; i < packet->deal.cardCount; i++) {
+				CardData& cd = packet->deal.cards[i];
+				//需要一个机制从suit/rank重新创建或找到CCard对象
+				CCard* pCard = new CCard(cd.suit, cd.rank);
+				//TODO:加一个加载图片函数
+				pCard->m_isFaceUp = TRUE;
+				m_cardListHand.AddTail(pCard);
+			}
+			SortCards(m_cardListHand);
+			break;
+		}
+		case MSG_PLAY_CARD: {//服务器收到出牌请求
+			if (!m_isServer) {//客户端不处理这个
+				return;
+			}
+			//TODO:规则验证
+			// 1. 检查是不是轮到 packet->playerIndex 出牌 (m_currentPlayerIndex)
+			// 2. 检查出的牌 packet->play.cards 是否比当前场上牌大
+			// 3. 检查牌型是否合法 (对子，顺子等)
+			bool isValidPlay = TRUE;//牌型是否有效的表示，默认为TRUE
+			if (isValidPlay) {
+				//验证通过
+				m_passCount = 0;//重置pass计数
+				m_lastWinnerIndex = packet->playerIndex;//记录最后出牌的人
+				m_currentPlayerIndex = (packet->playerIndex + 1) % 3;
+
+				//广播状态更新
+				GamePacket updatePacket = *packet;
+				updatePacket.msgType = MSG_UPDATE_STATE;
+				BroadcastPacket(&updatePacket);
+			}
+			break;
+		}
+		case MSG_PASS_TURN: {//服务器收到不要请求
+			if (!m_isServer) {
+				return;//客户端不处理
+			}
+			//TODO:验证是不是该玩家
+			m_passCount++;
+			m_currentPlayerIndex = (packet->playerIndex + 1) % 3;
+
+			//广播这个pass行为 (也可以合并到UPDATE_STATE里)
+			GamePacket updatePacket = *packet;
+			updatePacket.msgType = MSG_UPDATE_STATE;
+			BroadcastPacket(&updatePacket);
+
+			if (m_passCount >= 2) {//两个人都不要，本轮结束
+				ClearRound();
+			}
+			break;
+		}
+
+		case MSG_UPDATE_STATE: {//客户端和服务器收到这个
+			int player = packet->playerIndex;
+			CObList* pRoundList = nullptr;
+			m_currentRoundCards.Lookup(player, pRoundList);
+
+			//清空玩家上次出的牌
+			pRoundList->RemoveAll();
+
+			if (packet->play.cardCount > 0) {//出牌更新
+				//从玩家手中移除这些牌，并且加入出牌链表
+				for (int i = 0; i < packet->play.cardCount; i++) {
+					//TODO:实现FindAndRemoveCardFromHand
+					CCard* pCard = FindAndRemoveCardFromHand(player, packet->play.cards[i]);
+					if (pCard) {
+						pRoundList->AddTail(pCard);
+					}
+				}
+			}
+			// 如果 cardCount == 0，说明是Pass，上面清空列表就够了
+			m_currentPlayerIndex = (player + 1) % 3;
+			break;
+		}
+		case MSG_ROUND_CLEAR: // 所有客户端和服务器收到
+		{
+			// 清理本地的本轮出牌数据
+			for (int i = 0; i < 3; ++i)
+			{
+				CObList* pList = nullptr;
+				if (m_currentRoundCards.Lookup(i, pList)) pList->RemoveAll();
+			}
+			m_currentPlayerIndex = packet->roundInfo.nextPlayerIndex;
+			AfxMessageBox(_T("本轮结束，轮到玩家 %d 出牌"), m_currentPlayerIndex);
+			break;
+		}
+	}
+	UpdateAllViews(NULL);
+}
+//清理回合的函数，仅在服务器调用
+void CtestDoc::ClearRound()
+{
+	if (!m_isServer) return;
+	//将本轮的牌移入总的弃牌堆 (可选，也可以直接删除)
+	for (int i = 0; i < 3; i++) {
+		CObList* pList = nullptr;
+		if (m_currentRoundCards.Lookup(i, pList)) {
+			//m_playedCardList.AddTail(pList);
+			pList->RemoveAll();// 清空，但不删除CCard对象???
+		}
+	}
+	m_passCount = 0;
+	m_currentPlayerIndex = m_lastWinnerIndex;
+	GamePacket clearPacket;
+	clearPacket.msgType = MSG_ROUND_CLEAR;
+	clearPacket.roundInfo.nextPlayerIndex = m_currentPlayerIndex;
+	BroadcastPacket(&clearPacket);
 }

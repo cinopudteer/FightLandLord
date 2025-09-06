@@ -184,10 +184,13 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClInclude Include="CCard.h" />
+    <ClInclude Include="ClientSocket.h" />
     <ClInclude Include="framework.h" />
     <ClInclude Include="MainFrm.h" />
+    <ClInclude Include="NetProtocol.h" />
     <ClInclude Include="pch.h" />
     <ClInclude Include="Resource.h" />
+    <ClInclude Include="ServerSocket.h" />
     <ClInclude Include="targetver.h" />
     <ClInclude Include="test.h" />
     <ClInclude Include="testDoc.h" />
@@ -195,13 +198,16 @@
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="CCard.cpp" />
+    <ClCompile Include="ClientSocket.cpp" />
     <ClCompile Include="MainFrm.cpp" />
+    <ClCompile Include="NetProtocol.cpp" />
     <ClCompile Include="pch.cpp">
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Create</PrecompiledHeader>
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">Create</PrecompiledHeader>
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">Create</PrecompiledHeader>
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Create</PrecompiledHeader>
     </ClCompile>
+    <ClCompile Include="ServerSocket.cpp" />
     <ClCompile Include="test.cpp" />
     <ClCompile Include="testDoc.cpp" />
     <ClCompile Include="testView.cpp" />

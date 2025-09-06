@@ -9,7 +9,8 @@
 #define IDR_testTYPE                    130
 #define IDD_DIALOG1                     310
 #define IDC_BUTTON1                     1000
-#define IDC_BUTTON_PLAY_CARDS (WM_USER+1)
+#define IDC_BUTTON_PLAY (WM_USER+1)
+#define IDC_BUTTON_PASS (WM_USER+2)
 // Next default values for new objects
 // 
 #ifdef APSTUDIO_INVOKED

@@ -54,7 +54,8 @@ public:
 	afx_msg void OnMouseMove(UINT nFlags, CPoint point);
 protected:
 	
-	CButton m_wndPlayButton;    //出牌按钮
+	CButton m_btnPlay;    //出牌按钮
+	CButton m_btnPass;    //不要按钮
 
 	UINT_PTR m_nAnimationTimerID1;//动画计时器ID,用于发牌
 	CCard*   m_pAnimatingCard;     //当前移动的牌
@@ -68,14 +69,14 @@ protected:
 	int m_account = 0;
 
 	void DealNextCard(CtestDoc*);        // 设置并开始下一张牌的动画,index表明发牌给谁,account表示这发的是第几张牌
-	void DrawList(CObList&,CDC*);
+	void DrawList(CObList&,CDC*);        //把一串牌画出来
 	void ClearList(CObList&);
-	void ArrangeHand(CObList& hand, CRect clientRect, bool isMe);
-	void ArrangeSideHand(CObList& hand, CRect clientRect, bool isLeft);
+	void ArrangeHand(int playerIndex,CObList& hand, CRect clientRect);
 public:
 	afx_msg int OnCreate(LPCREATESTRUCT lpCreateStruct);//玩斗地主时处理窗口创建事件
-	afx_msg void OnPlayCards();//处理出牌按钮点击事件
-	afx_msg void OnTimer(UINT_PTR nIDEvent);
+	afx_msg void OnPlayClicked();//点击出牌按钮
+	afx_msg void OnPassClicked();//点击不要按钮
+	afx_msg void OnTimer(UINT_PTR nIDEvent);//计时器，用于发牌动画
 	afx_msg void OnDestroy();
 	afx_msg BOOL OnEraseBkgnd(CDC* pDC);
 };

@@ -31,7 +31,8 @@ BEGIN_MESSAGE_MAP(CtestView, CView)
 	ON_WM_LBUTTONUP()
 	ON_WM_MOUSEMOVE()
 	ON_WM_CREATE()//新加的
-	ON_BN_CLICKED(IDC_BUTTON_PLAY_CARDS,&CtestView::OnPlayCards)//
+	ON_BN_CLICKED(IDC_BUTTON_PLAY,&CtestView::OnPlayClicked)//消息映射，当出牌按钮被点击时
+	ON_BN_CLICKED(IDC_BUTTON_PASS,&CtestView::OnPassClicked)
 	ON_WM_TIMER()
 	ON_WM_DESTROY()
 	ON_WM_ERASEBKGND()
@@ -49,7 +50,7 @@ CtestView::CtestView() noexcept
 
 CtestView::~CtestView()
 {
-	CtestDoc* pDoc = GetDocument();
+	/*CtestDoc* pDoc = GetDocument();
 	POSITION pos = pDoc->m_cardListHand.GetHeadPosition();
 	while (pos) {
 		delete pDoc->m_cardListHand.GetNext(pos);
@@ -61,7 +62,7 @@ CtestView::~CtestView()
 	{
 		delete pDoc->m_playedCardList.GetNext(pos);
 	}
-	pDoc->m_playedCardList.RemoveAll();
+	pDoc->m_playedCardList.RemoveAll();*/
 }
 
 BOOL CtestView::PreCreateWindow(CREATESTRUCT& cs)
@@ -95,17 +96,24 @@ void CtestView::OnDraw(CDC* pDC)
 	CDC* pbk = &memDC;
 	pDoc->backGround.Draw(pbk->GetSafeHdc(), clientRect);
 
-	DrawList(pDoc->m_leftPlayerHand, &memDC);
-	DrawList(pDoc->m_rightPlayerHand, &memDC);
-	DrawList(pDoc->m_cardListHand, &memDC);
-	DrawList(pDoc->m_playedCardList, &memDC);
-	DrawList(pDoc->m_cardListAtTop, &memDC);
+	//DrawList(pDoc->m_cardListAtTop, &memDC);
 
 	if (m_pAnimatingCard != nullptr)
 	{
 		m_pAnimatingCard->Draw(&memDC);
 	}
 
+	//绘制本轮打出的牌
+	for (int i = 0; i < 3; i++) {
+		CObList* pList = nullptr;
+		if (pDoc->m_currentRoundCards.Lookup(i, pList)) {
+			ArrangeHand(i, *pList, clientRect);//布局每个玩家的出牌区
+			DrawList(*pList, &memDC);
+		}
+	}
+	DrawList(pDoc->m_leftPlayerHand, &memDC);
+	DrawList(pDoc->m_rightPlayerHand, &memDC);
+	DrawList(pDoc->m_cardListHand, &memDC);
 	pDC->BitBlt(0, 0, clientRect.Width(), clientRect.Height(), &memDC, 0, 0, SRCCOPY);
 }
 
@@ -172,9 +180,6 @@ void CtestView::OnLButtonDown(UINT nFlags, CPoint point)
 			break;
 		}
 	}
-	CString str;
-	str.Format(_T("x:%d,y:%d"), point.x, point.y);
-	MessageBox(str);
 	Invalidate(); // 重绘
 	CView::OnLButtonDown(nFlags, point);
 }
@@ -193,6 +198,7 @@ void CtestView::OnLButtonUp(UINT nFlags, CPoint point)
 {
 	// TODO: 在此添加消息处理程序代码和/或调用默认值
 	CView::OnLButtonUp(nFlags, point);
+
 }
 
 void CtestView::OnMouseMove(UINT nFlags, CPoint point)
@@ -238,7 +244,7 @@ void CtestView::DealNextCard(CtestDoc* pDoc)
 		case 2: // 玩家 (下)
 			pos = pDoc->m_cardListHand.FindIndex(m_account / 3);
 			m_pAnimatingCard = (CCard*)pDoc->m_rightPlayerHand.GetAt(pos);
-			m_ptAnimationEnd.x = (clientRect.Width() / 2) - (17 * m_cardWidth / 2) + (m_account / 3) * m_cardWidth / 4;
+			m_ptAnimationEnd.x = (clientRect.Width() / 2) - (16 * m_cardWidth / 4+m_cardWidth)/2 + (m_account / 3) * m_cardWidth / 4;
 			m_ptAnimationEnd.y = clientRect.bottom - m_cardHeight - 100;
 			break;
 		}
@@ -267,24 +273,37 @@ void CtestView::ClearList(CObList& obList)
 	while (pos) { delete obList.GetNext(pos); }
 }
 
-void CtestView::ArrangeHand(CObList& hand, CRect clientRect, bool isMe)
+void CtestView::ArrangeHand(int playerIndex, CObList& hand, CRect clientRect)//后续可能还要区分手牌和打出的牌
 {
 	if (hand.IsEmpty()) {
 		return;
 	}
 	int count = hand.GetCount();
-	int totalWidth = (count - 1) * 40 + m_cardWidth; // 每张牌重叠一部分
-	int startX = (clientRect.Width() - totalWidth) / 2;
-
-	int startY;
-	if (isMe) {
+	int totalWidth = (count - 1) * m_cardWidth/4 + m_cardWidth; // 每张牌重叠一部分
+	CPoint center = clientRect.CenterPoint();
+	int startX, startY;
+	switch (playerIndex) {
+	case 0: // 左边玩家
+		startX = center.x - totalWidth - 100;
+		startY = center.y - m_cardHeight / 2;
+		break;
+	case 1: // 右边玩家
+		startX = center.x + 100;
+		startY = center.y - m_cardHeight / 2;
+		break;
+	case 2: // 我
+		startX = center.x - totalWidth / 2;
+		startY = center.y + 50;
+		break;
+	}
+	/*if (isMe) {
 		// 玩家手牌在下方
 		startY = clientRect.bottom - m_cardHeight - 20;
 	}
 	else {
 		// 出掉的牌在中间靠下
 		startY = clientRect.CenterPoint().y + 50;
-	}
+	}*/
 
 	POSITION pos = hand.GetHeadPosition();
 	int i = 0;
@@ -294,7 +313,26 @@ void CtestView::ArrangeHand(CObList& hand, CRect clientRect, bool isMe)
 		pCard->m_rect.SetRect(startX + i * m_cardWidth/4, startY, startX + i * m_cardWidth/4 + m_cardWidth, startY + m_cardHeight);
 		i++;
 	}
+	if (playerIndex == 2) {
+		CtestDoc* pDoc = GetDocument();
+		if (pDoc->m_cardListHand.GetCount()) {
+			int startXHand = clientRect.CenterPoint().x - (pDoc->m_cardListHand.GetCount() - 1)* m_cardWidth / 8 - m_cardWidth;
+			int startYHand = clientRect.bottom - 200;
+			pos=pDoc->m_cardListHand.GetHeadPosition();
+			int i = 0;
+			while (pos) {
+				CCard* pCard = (CCard*)pDoc->m_cardListHand.GetNext(pos);
+				pCard->m_rect.SetRect(startXHand + m_cardWidth / 4 * i, startYHand, startXHand + m_cardWidth / 4 * i + m_cardWidth, startYHand + m_cardHeight);
+				if (pCard->m_bIsSelected) {
+					pCard->m_rect.OffsetRect(0, -20);
+				}
+				i++;
+			}
+
+		}
+	}
 }
+
 
 int CtestView::OnCreate(LPCREATESTRUCT lpCreateStruct)
 {
@@ -302,46 +340,70 @@ int CtestView::OnCreate(LPCREATESTRUCT lpCreateStruct)
 		return -1;
 
 	// TODO:  在此添加您专用的创建代码
-	m_wndPlayButton.Create(
+	//CRect clientRect;
+	//GetClientRect(&clientRect);
+	int btnwidth = 100, btnHeight = 40;//设置按钮大小以及位置
+	//int btnY = clientRect.bottom - 180;
+	//int centerX = clientRect.CenterPoint().x;
+	m_btnPlay.Create(//创建按钮
 		_T("出牌"),
 		WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
-		CRect(10, 10, 100, 40),
+		CRect(1000-btnwidth-20, 1100, 1000 - 20, 1100+btnHeight),
 		this,
-		IDC_BUTTON_PLAY_CARDS
+		IDC_BUTTON_PLAY
+	);
+	m_btnPass.Create(
+		_T("不要"),
+		WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
+		CRect(1000 + 20, 1100, 1000 + 20 + btnwidth, 1100 + btnHeight),
+		this,
+		IDC_BUTTON_PASS
 	);
 	return 0;
 }
 
-void CtestView::OnPlayCards()
+void CtestView::OnPlayClicked()
 {
 	CtestDoc* pDoc = GetDocument();
-	POSITION pos = pDoc->m_playedCardList.GetHeadPosition();//清理所有打出的牌
-	while (pos) {
-		delete pDoc->m_playedCardList.GetNext(pos);
-	}
-	pDoc->m_playedCardList.RemoveAll();
-	//将选中的牌移到打出的牌列表
+	GamePacket packet;//创建即将发送的数据包
+	packet.msgType = MSG_PLAY_CARD;
+	//TODO:
+	packet.playerIndex = pDoc->playerIndex;
+	packet.play.cardCount = 0;
+	
 	CRect clientRect;
 	GetClientRect(&clientRect);
 	CPoint centerPoint = clientRect.CenterPoint();
 	int currentCardOffset = 0;
-	
+	POSITION pos;
 	pos = pDoc->m_cardListHand.GetHeadPosition();
+	CObList* pList = nullptr;
+	pDoc->m_currentRoundCards.Lookup(pDoc->playerIndex,pList);
 	while (pos) {
 		POSITION currentPos = pos;
 		CCard* pCard = (CCard*)pDoc->m_cardListHand.GetNext(pos);
 		if (pCard->m_bIsSelected) {
-			pDoc->m_cardListHand.RemoveAt(currentPos);
-			pDoc->m_playedCardList.AddTail(pCard);
-			pCard->m_bIsSelected = FALSE;
-			int cardWidth = pCard->m_rect.Width();
-			int cardHeight = pCard->m_rect.Height();
-			int startX = centerPoint.x + currentCardOffset;
-			pCard->m_rect.SetRect(startX, centerPoint.y - (cardHeight / 2), startX + cardWidth, centerPoint.y + (cardHeight / 2));
-			currentCardOffset += cardWidth/4;
+			assert(packet.play.cardCount < MAX_CARDS_TO_DEAL);
+			packet.play.cards[packet.play.cardCount].suit = pCard->m_suit;//填充数据包
+			packet.play.cards[packet.play.cardCount].rank = pCard->m_rank;
+			packet.play.cardCount++;
 		}
 	}
+	// TODO: 在这里可以加入客户端的简单规则检查
+	//重画手牌
+	if (packet.play.cardCount > 0) {//发送数据包
+		pDoc->SendPacket(&packet);
+	}
 	Invalidate();
+}
+
+void CtestView::OnPassClicked()
+{
+	CtestDoc* pDoc = GetDocument();
+	GamePacket packet;
+	packet.msgType = MSG_PASS_TURN;
+	packet.playerIndex = pDoc->playerIndex;
+	pDoc->SendPacket(&packet);
 }
 
 void CtestView::OnTimer(UINT_PTR nIDEvent)
