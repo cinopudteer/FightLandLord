@@ -66,6 +66,8 @@ protected:
 	int      m_nNextPlayer;      // 下一张牌发给谁 (0=左, 1=右, 2=下)
 	int      m_cardWidth, m_cardHeight;  //卡片的长和宽
 	int m_account = 0;
+	BOOL m_NeedDeal;//判断是否需要发牌动画
+	BOOL m_isDeal;//判断是否处于发牌阶段，发牌阶段结束点play就可以整理手牌
 
 	void DealNextCard(CtestDoc*);        // 设置并开始下一张牌的动画,index表明发牌给谁,account表示这发的是第几张牌
 	void DrawList(CObList&,CDC*);

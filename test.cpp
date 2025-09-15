@@ -12,6 +12,8 @@
 #include "testDoc.h"
 #include "testView.h"
 #include "resource.h"
+#include "Login.h"
+#include "Login.h" 
 #ifdef _DEBUG
 #define new DEBUG_NEW
 #endif
@@ -126,6 +128,30 @@ BOOL CtestApp::InitInstance()
 	// 用 /RegServer、/Register、/Unregserver 或 /Unregister 启动应用程序，则返回 FALSE。
 	if (!ProcessShellCommand(cmdInfo))
 		return FALSE;
+
+	//-------------------------
+	CMainFrame* pMainFrame = (CMainFrame*)m_pMainWnd;
+	CtestDoc* pDoc = (CtestDoc*)pMainFrame->GetActiveDocument();
+
+	// <<<< 全面修改的网络设置流程 >>>>
+	Login dlg(pDoc); // 创建对话框，并传入Doc指针
+	pDoc->SetSetupDialog(&dlg); // 在Doc中保存对话框的指针，用于回调
+
+	if (dlg.DoModal() != IDOK)
+	{
+		return FALSE; // 如果用户点了取消或连接失败，直接退出
+	}
+
+	// 清理指针，防止悬挂
+	pDoc->SetSetupDialog(nullptr);
+	pDoc->m_bGameReady = TRUE;//宣布游戏就绪
+	// 如果是服务器，并且人齐了，现在发牌
+	if (pDoc->m_isServer && pDoc->m_connectedClients == 2)
+	{
+		//DealCardsAndBroadcast(); // 在这里触发发牌逻辑
+		pDoc->DealCardsAndBroadcast();
+	}
+	// <<<< 结束 >>>>
 
 	// 唯一的一个窗口已初始化，因此显示它并对其进行更新
 	m_pMainWnd->ShowWindow(SW_SHOW);

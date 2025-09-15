@@ -44,7 +44,10 @@ CtestView::CtestView() noexcept
 	// TODO: 在此处添加构造代码
 	m_cardWidth = 80;
 	m_cardHeight = 105;
-
+	m_pAnimatingCard = nullptr;
+	m_NeedDeal = 1;
+	m_nNextPlayer = 2;//暂时为2，后面叫地主再改
+	m_isDeal = 1;
 }
 
 CtestView::~CtestView()
@@ -82,7 +85,9 @@ void CtestView::OnDraw(CDC* pDC)
 		return;
 
 	// TODO: 在此处为本机数据添加绘制代码
-
+	if (!pDoc->m_bGameReady) {
+		return;//游戏未就绪，直接结束
+	}
 	// 为了防止闪烁，使用双缓冲技术
 	CRect clientRect;
 	GetClientRect(&clientRect);
@@ -95,17 +100,42 @@ void CtestView::OnDraw(CDC* pDC)
 	CDC* pbk = &memDC;
 	pDoc->backGround.Draw(pbk->GetSafeHdc(), clientRect);
 
+<<<<<<< Updated upstream
 	DrawList(pDoc->m_leftPlayerHand, &memDC);
 	DrawList(pDoc->m_rightPlayerHand, &memDC);
 	DrawList(pDoc->m_cardListHand, &memDC);
 	DrawList(pDoc->m_playedCardList, &memDC);
 	DrawList(pDoc->m_cardListAtTop, &memDC);
 
+=======
+	//DrawList(pDoc->m_cardListAtTop, &memDC);
+	if (m_NeedDeal) {
+		m_nAnimationTimerID1 = SetTimer(ANIMATION_TIMER_ID1, 16, NULL);
+		m_NeedDeal = 0;
+	}
+>>>>>>> Stashed changes
 	if (m_pAnimatingCard != nullptr)
 	{
 		m_pAnimatingCard->Draw(&memDC);
 	}
+<<<<<<< Updated upstream
 
+=======
+	//绘制本轮打出的牌
+	for (int i = 0; i < 3; i++) {
+		CObList* pList = nullptr;
+		if (pDoc->m_currentRoundCards.Lookup(i, pList)) {
+			DrawList(*pList, &memDC);
+		}
+	}
+	if (m_isDeal == 0) {
+		ArrangeHand(2, pDoc->m_cardListHand, clientRect);  //!!!!!!!这里设置我为2，算是历史遗留问题
+	}
+	DrawList(pDoc->m_leftPlayerHand, &memDC);
+	DrawList(pDoc->m_rightPlayerHand, &memDC);
+	DrawList(pDoc->m_cardListHand, &memDC);
+	DrawList(pDoc->m_cardListAtTop, &memDC);
+>>>>>>> Stashed changes
 	pDC->BitBlt(0, 0, clientRect.Width(), clientRect.Height(), &memDC, 0, 0, SRCCOPY);
 }
 
@@ -182,10 +212,15 @@ void CtestView::OnLButtonDown(UINT nFlags, CPoint point)
 void CtestView::OnInitialUpdate()
 {
 	// TODO: 在此添加专用代码和/或调用基类
+	CtestDoc* pDoc = GetDocument();
+	// 游戏未就绪，直接结束
+	if (!pDoc || !pDoc->m_bGameReady)
+	{
+		return;
+	}
 	GetParentFrame()->MoveWindow(0, 0, 2000, 1280);
 	m_pAnimatingCard = nullptr;
 	m_nNextPlayer = 0;
-	m_nAnimationTimerID1 = SetTimer(ANIMATION_TIMER_ID1, 16, NULL);
 	CView::OnInitialUpdate();
 }
 
@@ -207,6 +242,7 @@ void CtestView::DealNextCard(CtestDoc* pDoc)
 {
 	if (m_account == 54) {
 		KillTimer(m_nAnimationTimerID1);
+		m_isDeal = 0;//发牌阶段已结束
 		m_pAnimatingCard = nullptr;
 		Invalidate();
 		return;
@@ -226,14 +262,14 @@ void CtestView::DealNextCard(CtestDoc* pDoc)
 		case 0: // 左边玩家
 			pos = pDoc->m_leftPlayerHand.FindIndex(m_account / 3);
 			m_pAnimatingCard = (CCard*)pDoc->m_cardListHand.GetAt(pos);
-			m_ptAnimationEnd.x = 30;
-			m_ptAnimationEnd.y = 200 + (m_account / 3) * m_cardHeight / 4;
+			m_ptAnimationEnd.x = 100;
+			m_ptAnimationEnd.y = 200;
 			break;
 		case 1: // 右边玩家
 			pos = pDoc->m_rightPlayerHand.FindIndex(m_account / 3);
 			m_pAnimatingCard = (CCard*)pDoc->m_leftPlayerHand.GetAt(pos);
 			m_ptAnimationEnd.x = clientRect.right - m_cardWidth - 100;
-			m_ptAnimationEnd.y = 200 + (m_account / 3) * m_cardHeight / 4;
+			m_ptAnimationEnd.y = 200;
 			break;
 		case 2: // 玩家 (下)
 			pos = pDoc->m_cardListHand.FindIndex(m_account / 3);
@@ -294,6 +330,27 @@ void CtestView::ArrangeHand(CObList& hand, CRect clientRect, bool isMe)
 		pCard->m_rect.SetRect(startX + i * m_cardWidth/4, startY, startX + i * m_cardWidth/4 + m_cardWidth, startY + m_cardHeight);
 		i++;
 	}
+<<<<<<< Updated upstream
+=======
+	if (playerIndex == 2) {
+		CtestDoc* pDoc = GetDocument();
+		if (pDoc->m_cardListHand.GetCount()) {
+			int startXHand = clientRect.CenterPoint().x - (pDoc->m_cardListHand.GetCount() - 1)* m_cardWidth / 8 - m_cardWidth/2;
+			int startYHand = clientRect.bottom - 100-m_cardHeight;
+			pos=pDoc->m_cardListHand.GetHeadPosition();
+			int i = 0;
+			while (pos) {
+				CCard* pCard = (CCard*)pDoc->m_cardListHand.GetNext(pos);
+				pCard->m_rect.SetRect(startXHand + m_cardWidth / 4 * i, startYHand, startXHand + m_cardWidth / 4 * i + m_cardWidth, startYHand + m_cardHeight);
+				if (pCard->m_bIsSelected) {
+					pCard->m_rect.OffsetRect(0, -20);
+				}
+				i++;
+			}
+
+		}
+	}
+>>>>>>> Stashed changes
 }
 
 int CtestView::OnCreate(LPCREATESTRUCT lpCreateStruct)
@@ -305,9 +362,22 @@ int CtestView::OnCreate(LPCREATESTRUCT lpCreateStruct)
 	m_wndPlayButton.Create(
 		_T("出牌"),
 		WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
+<<<<<<< Updated upstream
 		CRect(10, 10, 100, 40),
 		this,
 		IDC_BUTTON_PLAY_CARDS
+=======
+		CRect(1000-btnwidth-20, 100, 1000 - 20, 100+btnHeight),
+		this,
+		IDC_BUTTON_PLAY
+	);
+	m_btnPass.Create(
+		_T("不要"),
+		WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
+		CRect(1000 + 20, 100, 1000 + 20 + btnwidth, 100 + btnHeight),
+		this,
+		IDC_BUTTON_PASS
+>>>>>>> Stashed changes
 	);
 	return 0;
 }
@@ -341,6 +411,16 @@ void CtestView::OnPlayCards()
 			currentCardOffset += cardWidth/4;
 		}
 	}
+<<<<<<< Updated upstream
+=======
+	// TODO: 在这里加一个判断牌能不能出的函数
+	 
+	
+	//重画手牌
+	if (packet.play.cardCount > 0) {//发送数据包
+		pDoc->SendPacket(&packet);
+	}
+>>>>>>> Stashed changes
 	Invalidate();
 }
 
